@@ -1,4 +1,4 @@
-(defproject cfr-d "1.0.0-SNAPSHOT"
+(defproject cfr-d "1.0.0"
   :description "CFR de-normalizer"
   :main com.cfr.d.main
   :dependencies [
