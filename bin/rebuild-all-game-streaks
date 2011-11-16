@@ -1,0 +1,8 @@
+#!/bin/bash
+
+source $(dirname $0)/include
+
+java -classpath $CFR_D_HOME/uber.jar \
+    -Dcfr.config=$CFR_D_HOME/config.clj \
+    clojure.main \
+    -e "(do (require 'com.cfr.d.model) (com.cfr.d.model/rebuild-all-game-streaks))"

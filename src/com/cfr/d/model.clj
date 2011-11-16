@@ -1,4 +1,5 @@
 (ns com.cfr.d.model
+  (:gen-class)
   (:require [clojure.java.jdbc :as   sql])
   (:use     [com.cfr.d.config  :only [config]]))
 
@@ -110,7 +111,7 @@
   (transaction
     (do
       (sql/delete-rows
-          :d_head_to_head_streaks
+          :d_h2h_game_streaks
           ["school_id = ? AND opp_school_id = ?" school-id opp-school-id])
       (sql/with-query-results rs
           ["SELECT win, loss, tie, score, opp_score, season
@@ -131,7 +132,7 @@
                       acc)))]
           (doseq [streak (p (first-streak (first rs)) [] (rest rs))]
             (sql/insert-records
-                :d_head_to_head_streaks
+                :d_h2h_game_streaks
                 (assoc
                     (select-keys streak [
                         :is_win :streak :start_season :end_season :points_for :points_against])
@@ -143,7 +144,7 @@
     (println ids)
     (apply rebuild-head-to-head-streaks-by-schools ids)))
 
-(defn rebuild-all-streaks-by-school [school-id]
+(defn rebuild-all-game-streaks-by-school [school-id]
   (transaction
     (do
       (sql/delete-rows :d_game_streaks ["school_id = ?" school-id])
@@ -171,15 +172,15 @@
                          :is_win :streak :start_season :end_season :points_for :points_against])
                      :school_id school-id))))))))
 
-(defn rebuild-all-streaks []
-  (doseq [id (take 10 (find-all-schools-with-games))]
+(defn rebuild-all-game-streaks []
+  (doseq [id (find-all-schools-with-games)]
     (println id)
-    (rebuild-all-streaks-by-school id)))
+    (rebuild-all-game-streaks-by-school id)))
 
 (defn rebuild-head-to-head-games [school-id]
   (transaction
     (do
-      (sql/delete-rows :d_head_to_head_games ["school_id = ?" school-id])
+      (sql/delete-rows :d_h2h_games ["school_id = ?" school-id])
       (sql/with-query-results rs
           ["SELECT school_id, opp_school_id,
           SUM(win) AS wins, SUM(loss) AS losses, SUM(tie) AS ties,
@@ -188,11 +189,11 @@
           WHERE school_id = ?
           GROUP BY school_id, opp_school_id" school-id]
         (doseq [h2h rs]
-          (sql/insert-record :d_head_to_head_games h2h))))))
+          (sql/insert-record :d_h2h_games h2h))))))
 
 (defn rebuild-all-head-to-head-games []
   (doseq [id (find-all-schools-with-games)]
     (println id)
     (rebuild-head-to-head-games id)))
 
-(defn doit [] (rebuild-all-streaks))
+(defn doit [] (rebuild-all-game-streaks))
