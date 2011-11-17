@@ -2,5 +2,5 @@
   (:gen-class)
   (:require [com.cfr.d.model :as model]))
 
-(defn -main [& args]
-  (model/doit))
+(defn -main [main-class & args]
+  (apply model/doit args))

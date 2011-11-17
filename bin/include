@@ -1,1 +1,6 @@
 #!/bin/bash
+
+if test -z "$CFR_D_HOME"; then
+  echo "CFR_D_HOME must be set"
+  exit 1
+fi
