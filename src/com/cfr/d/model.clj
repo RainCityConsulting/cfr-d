@@ -173,27 +173,33 @@
            WHERE g.school_id = ?
            AND g.game_date IS NOT NULL
            ORDER BY g.opp_school_id ASC, g.game_date DESC" school-id]
-        (letfn [(p [cur acc [game & games]]
-                  (if (seq game)
-                    (if (= (:opp_school_id cur) (:opp_school_id game))
-                      (if (= (select-keys cur [:win :loss :tie]) (select-keys game [:win :loss :tie]))
-                        (p (add-game-to-streak cur game) acc games)
-                        (if (< 1 (:streak cur))
-                          (p (start-streak game (:start_schedule_id cur)) (conj acc cur) games)
-                          (p (start-streak game (:start_schedule_id cur)) acc games)))
-                      (if (< 1 (:streak cur))
-                        (p (first-streak game) (conj acc cur) games)
-                        (p (first-streak game) acc games)))
-                    (if (< 1 (:streak cur))
-                      (conj acc cur)
-                      acc)))]
-          (doseq [streak (p (first-streak (first rs)) [] (rest rs))]
-            (sql/insert-records
-                :d_h2h_game_streaks
-                (assoc
-                    (select-keys streak [
-                        :division_id :opp_school_id :is_win :streak :start_season :end_season :points_for :points_against])
-                    :school_id school-id))))))))
+        (doseq [streak (loop [cur (first-streak (first rs)) acc [] [game & games] rs]
+          (if (seq game)
+            (if (= (:opp_school_id cur) (:opp_school_id game))
+              (if (= (select-keys cur [:win :loss :tie]) (select-keys game [:win :loss :tie]))
+                (recur (add-game-to-streak cur game) acc games)
+                (if (< 1 (:streak cur))
+                  (recur (start-streak game (:start_schedule_id cur)) (conj acc cur) games)
+                  (recur (start-streak game (:start_schedule_id cur)) acc games)))
+              (if (< 1 (:streak cur))
+                (recur (first-streak game) (conj acc cur) games)
+                (recur (first-streak game) acc games)))
+            (if (< 1 (:streak cur))
+              (conj acc cur)
+              acc)))]
+          (sql/insert-records
+            :d_h2h_game_streaks
+            (assoc
+                (select-keys streak [
+                    :division_id
+                    :opp_school_id
+                    :is_win
+                    :streak
+                    :start_season
+                    :end_season
+                    :points_for
+                    :points_against])
+                :school_id school-id)))))))
 
 (defn rebuild-all-h2h-streaks []
   (doseq [id (find-all-schools-with-games)]
@@ -215,7 +221,7 @@
                 g.score, g.opp_score, g.season
             FROM games g
             INNER JOIN school_conference_seasons scs
-                ON g.opp_school_id = scs.school_id AND g.season = scs.season
+                ON g.school_id = scs.school_id AND g.season = scs.season
             INNER JOIN conference_division_seasons cds
                 ON scs.conference_id = cds.conference_id AND scs.season = cds.season
             WHERE g.school_id = ?
@@ -281,4 +287,110 @@
     (println id)
     (rebuild-h2h-games id)))
 
-(defn doit [& args] (apply rebuild-all-h2h-streaks args))
+(defn rebuild-away-game-streaks-by-school [school-id]
+  (transaction
+    (do
+      (sql/delete-rows :d_away_game_streaks ["school_id = ?" school-id])
+      (sql/with-query-results rs
+          ["SELECT
+                cds.division_id, g.schedule_id, g.win, g.loss, g.tie,
+                g.score, g.opp_score, g.season
+            FROM games g
+            INNER JOIN school_conference_seasons scs
+                ON g.school_id = scs.school_id AND g.season = scs.season
+            INNER JOIN conference_division_seasons cds
+                ON scs.conference_id = cds.conference_id AND scs.season = cds.season
+            WHERE g.school_id = ?
+            AND g.game_date IS NOT NULL
+            AND g.home_school_id = g.opp_school_id
+            ORDER BY g.game_date DESC" school-id]
+        (letfn [(p [cur acc [game & games]]
+                  (if (seq game)
+                    (if (= (select-keys cur [:win :loss :tie]) (select-keys game [:win :loss :tie]))
+                      (p (add-game-to-streak cur game) acc games)
+                      (if (< 1 (:streak cur))
+                        (p (start-streak game (:start_schedule_id cur)) (conj acc cur) games)
+                        (p (start-streak game (:start_schedule_id cur)) acc games)))
+                    (if (< 1 (:streak cur))
+                      (conj acc cur)
+                      acc)))]
+           (doseq [streak (p (first-streak (first rs)) [] (rest rs))]
+             (sql/insert-record
+                 :d_away_game_streaks
+                 (assoc
+                     (select-keys streak [
+                         :division_id
+                         :is_win
+                         :streak
+                         :start_season
+                         :start_schedule_id
+                         :end_season
+                         :break_schedule_id
+                         :points_for
+                         :points_against])
+                     :school_id school-id))))))))
+
+(defn rebuild-all-away-game-streaks []
+  (doseq [id (find-all-schools-with-games)]
+    (println id)
+    (rebuild-away-game-streaks-by-school id)))
+
+(defn rebuild-updated-away-game-streaks [since]
+  (doseq [id (find-all-schools-with-games since)]
+    (println id)
+    (rebuild-away-game-streaks-by-school id)))
+
+(defn rebuild-home-game-streaks-by-school [school-id]
+  (transaction
+    (do
+      (sql/delete-rows :d_home_game_streaks ["school_id = ?" school-id])
+      (sql/with-query-results rs
+          ["SELECT
+                cds.division_id, g.schedule_id, g.win, g.loss, g.tie,
+                g.score, g.opp_score, g.season
+            FROM games g
+            INNER JOIN school_conference_seasons scs
+                ON g.school_id = scs.school_id AND g.season = scs.season
+            INNER JOIN conference_division_seasons cds
+                ON scs.conference_id = cds.conference_id AND scs.season = cds.season
+            WHERE g.school_id = ?
+            AND g.game_date IS NOT NULL
+            AND g.home_school_id = g.school_id
+            ORDER BY g.game_date DESC" school-id]
+        (letfn [(p [cur acc [game & games]]
+                  (if (seq game)
+                    (if (= (select-keys cur [:win :loss :tie]) (select-keys game [:win :loss :tie]))
+                      (p (add-game-to-streak cur game) acc games)
+                      (if (< 1 (:streak cur))
+                        (p (start-streak game (:start_schedule_id cur)) (conj acc cur) games)
+                        (p (start-streak game (:start_schedule_id cur)) acc games)))
+                    (if (< 1 (:streak cur))
+                      (conj acc cur)
+                      acc)))]
+           (doseq [streak (p (first-streak (first rs)) [] (rest rs))]
+             (sql/insert-record
+                 :d_home_game_streaks
+                 (assoc
+                     (select-keys streak [
+                         :division_id
+                         :is_win
+                         :streak
+                         :start_season
+                         :start_schedule_id
+                         :end_season
+                         :break_schedule_id
+                         :points_for
+                         :points_against])
+                     :school_id school-id))))))))
+
+(defn rebuild-all-home-game-streaks []
+  (doseq [id (find-all-schools-with-games)]
+    (println id)
+    (rebuild-home-game-streaks-by-school id)))
+
+(defn rebuild-updated-home-game-streaks [since]
+  (doseq [id (find-all-schools-with-games since)]
+    (println id)
+    (rebuild-home-game-streaks-by-school id)))
+
+(defn doit [& args] (apply rebuild-all-game-streaks args))
