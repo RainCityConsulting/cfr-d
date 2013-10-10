@@ -1,6 +1,5 @@
 (defproject cfr-d "1.0.1"
   :description "CFR de-normalizer"
-  :main com.cfr.d.main
   :dependencies [
       [org.clojure/clojure "1.3.0"]
       [org.clojure/java.jdbc "0.1.1"]
