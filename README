@@ -1,0 +1,15 @@
+lein is required to build
+
+From project home, type `lein uberjar`
+
+CFR_D_HOME environment variable must be set
+
+cp target/cfr-d*-standalone.jar $CFR_D_HOME/uber.jar
+
+Create a $CFR_D_HOME/config.clj file like this:
+
+{
+  :db-name cfr
+  :db-user cfr_user
+  :db-pass cfr
+}
